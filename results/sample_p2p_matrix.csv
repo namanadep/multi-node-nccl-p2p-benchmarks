@@ -1,0 +1,5 @@
+src_gpu,dst_gpu,gbps,ok
+0,1,781.3,True
+0,2,779.8,True
+0,7,780.1,True
+1,0,780.5,True

@@ -1,0 +1,4 @@
+# 2-node MPI hostfile — replace with your cluster node addresses
+# Example:
+# 10.0.0.1 slots=8
+# 10.0.0.2 slots=8

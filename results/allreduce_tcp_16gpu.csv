@@ -1,0 +1,15 @@
+size_bytes,busbw_gbs,wrong_results,test,nodes,gpus_per_node,transport
+8,0.00,0,all_reduce_perf,2,8,TCP_bond0
+256,0.01,0,all_reduce_perf,2,8,TCP_bond0
+1024,0.03,0,all_reduce_perf,2,8,TCP_bond0
+4096,0.10,0,all_reduce_perf,2,8,TCP_bond0
+16384,0.38,0,all_reduce_perf,2,8,TCP_bond0
+65536,0.72,0,all_reduce_perf,2,8,TCP_bond0
+262144,1.21,0,all_reduce_perf,2,8,TCP_bond0
+1048576,1.41,0,all_reduce_perf,2,8,TCP_bond0
+4194304,1.89,0,all_reduce_perf,2,8,TCP_bond0
+8388608,2.04,0,all_reduce_perf,2,8,TCP_bond0
+16777216,2.15,0,all_reduce_perf,2,8,TCP_bond0
+33554432,2.19,0,all_reduce_perf,2,8,TCP_bond0
+67108864,2.22,0,all_reduce_perf,2,8,TCP_bond0
+134217728,2.31,0,all_reduce_perf,2,8,TCP_bond0
