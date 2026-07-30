@@ -1,12 +1,12 @@
 # multi-node-nccl-p2p-benchmarks
 
-**One-line:** Measured GPU-to-GPU collective bandwidth and P2P throughput on a real 2-node × 8 NVIDIA H200 cluster — including intra-node NVLink (~300 GB/s), cross-node TCP AllReduce (~2.28 GB/s), and a documented RoCE v2 failure investigation with root-cause analysis.
+**One-line:** Measured GPU-to-GPU collective bandwidth and P2P throughput on a real 2-node × 8 NVIDIA H200 cluster, including intra-node NVLink (~300 GB/s), cross-node TCP AllReduce (~2.28 GB/s), and a documented RoCE v2 failure investigation with root-cause analysis.
 
 ---
 
 ## Why this exists
 
-Multi-GPU communication is where distributed training either scales or doesn't. This repo documents what actually happened when commissioning a 16-GPU H200 cluster: what worked, what failed (RoCE v2), why it failed, and how to diagnose it. Real `nccl-tests` output, real bandwidth numbers, real error codes — not a synthetic demo.
+Multi-GPU communication is where distributed training either scales or doesn't. This repo documents what actually happened when commissioning a 16-GPU H200 cluster: what worked, what failed (RoCE v2), why it failed, and how to diagnose it. Real `nccl-tests` output, real bandwidth numbers, real error codes, not a synthetic demo.
 
 **Related articles:** *NVLink: 3 Terabits Per Second Between 8 H200 GPUs* and *NCCL, AllReduce, and Why Your Multi-GPU Training Is Probably Bottlenecked* (Medium, Apr 2026).
 
@@ -33,14 +33,14 @@ Multi-GPU communication is where distributed training either scales or doesn't. 
 
 ```mermaid
 flowchart TB
-  subgraph n1 [Node 1 — 10.0.0.1]
+  subgraph n1 [Node 1 (10.0.0.1)]
     G1[8× H200\nNVLink full mesh\n~300 GB/s intra]
   end
-  subgraph n2 [Node 2 — 10.0.0.2]
+  subgraph n2 [Node 2 (10.0.0.2)]
     G2[8× H200\nNVLink full mesh\n~300 GB/s intra]
   end
   n1 <-->|bond0 TCP\n~2.28 GB/s| n2
-  n1 <-.->|RoCE v2\nFAIL — IBV_WC_RETRY_EXC_ERR\nfabric misconfiguration| n2
+  n1 <-.->|RoCE v2\nFAIL: IBV_WC_RETRY_EXC_ERR\nfabric misconfiguration| n2
 ```
 
 ---
@@ -53,7 +53,7 @@ flowchart TB
 |----------|-----------------|---------|
 | Any i→j (all 56 pairs) | **~781 GB/s** | NVLink full mesh (NV18) |
 
-All GPU pairs within the node show symmetric ~781 GB/s — confirms healthy NVSwitch topology. Asymmetric numbers here indicate a faulty NVLink or NUMA routing issue.
+All GPU pairs within the node show symmetric ~781 GB/s, confirming healthy NVSwitch topology. Asymmetric numbers here indicate a faulty NVLink or NUMA routing issue.
 
 **How to reproduce:**
 ```bash
@@ -87,13 +87,13 @@ mpirun -np 2 -hostfile configs/hostfile \
 ```
 
 Other collectives tested (all PASS, 0 wrong):
-- AllReduce, Broadcast, Send/Recv — all at 16 GPUs (2 nodes × 8)
+- AllReduce, Broadcast, Send/Recv, all at 16 GPUs (2 nodes × 8)
 
 ---
 
 ## RoCE v2 investigation: a documented failure
 
-> This is the most instructive part of this repo. Hardware was present and correctly configured at the host layer — yet RDMA failed. The failure was diagnosed to the **network/fabric layer** (switch PFC/ECN/DCQCN misconfiguration), not the host.
+> This is the most instructive part of this repo. Hardware was present and correctly configured at the host layer, yet RDMA failed. The failure was diagnosed to the **network/fabric layer** (switch PFC/ECN/DCQCN misconfiguration), not the host.
 
 ### What was present
 
@@ -104,7 +104,7 @@ Other collectives tested (all PASS, 0 wrong):
 
 ### What failed
 
-**Test 1 — NCCL over RoCE v2 (GID_INDEX=3):**
+**Test 1: NCCL over RoCE v2 (GID_INDEX=3):**
 ```
 NET/IB: Got completion from peer 10.0.0.2<...>
   with status=IBV_WC_RETRY_EXC_ERR(12)
@@ -112,15 +112,15 @@ NET/IB: Got completion from peer 10.0.0.2<...>
   localGid ::ffff:10.0.0.1 remoteGids::ffff:10.0.0.2 hca mlx5_2
 ```
 
-**Test 2 — Direct RDMA (`ib_write_bw`):**
+**Test 2: Direct RDMA (`ib_write_bw`):**
 ```
 Server: Couldn't listen to port 18515
 Client: Failed status 12, syndrom 0x81
 ```
 
-**Test 3 — Second node pair (10.0.0.2 ↔ 10.0.0.3):**
+**Test 3: Second node pair (10.0.0.2 ↔ 10.0.0.3):**
 ```
-NCCL WARN Timeout waiting for connection from peer — unhandled system error
+NCCL WARN Timeout waiting for connection from peer: unhandled system error
 Segfault in NCCL communicator
 ```
 
@@ -152,7 +152,7 @@ pip install -e ".[dev]"
 # Intra-node P2P matrix (requires 1 node with ≥2 GPUs)
 p2p-bench run --out results/p2p_001
 
-# Cross-node NCCL AllReduce — TCP (edit configs/hostfile first)
+# Cross-node NCCL AllReduce over TCP (edit configs/hostfile first)
 export NCCL_SOCKET_IFNAME=bond0
 export NCCL_IB_DISABLE=1
 mpirun -np 2 -hostfile configs/hostfile -map-by node \
@@ -165,20 +165,20 @@ mpirun -np 2 -hostfile configs/hostfile -map-by node \
 
 ## Key findings
 
-- **NVLink full mesh delivers ~781 GB/s** between any GPU pair on an H200 node — symmetric topology confirmed. Asymmetry means hardware fault.
+- **NVLink full mesh delivers ~781 GB/s** between any GPU pair on an H200 node. Symmetric topology confirmed; asymmetry means hardware fault.
 - **Cross-node TCP AllReduce at ~2.28 GB/s** is ~340× slower than intra-node NVLink. Cross-node bandwidth is the dominant training bottleneck for large allreduce payloads.
-- **RoCE v2 hardware ≠ RoCE v2 working** — NIC and host configuration can be correct while the switch fabric blocks RDMA. `IBV_WC_RETRY_EXC_ERR` with working TCP is a network/fabric issue, not a NIC or driver issue.
-- **TCP is a reliable production fallback** — all 16-GPU collectives passed with zero wrong results. Use TCP until RoCE fabric is verified.
+- **RoCE v2 hardware ≠ RoCE v2 working**: NIC and host configuration can be correct while the switch fabric blocks RDMA. `IBV_WC_RETRY_EXC_ERR` with working TCP is a network/fabric issue, not a NIC or driver issue.
+- **TCP is a reliable production fallback**: all 16-GPU collectives passed with zero wrong results. Use TCP until RoCE fabric is verified.
 - **`NCCL_SOCKET_IFNAME`** must be set explicitly; without it, NCCL picks the wrong interface and hangs.
 
 ---
 
 ## Production relevance
 
-- **Pre-flight validation** before handing a multi-node cluster to users — catches cabling, NVLink, and switch issues before the first training job.
-- **RoCE v2 commissioning** — the diagnostic sequence here is the standard workflow for enabling RDMA on new Ethernet-fabric GPU clusters (PFC → ECN → DCQCN → ib_write_bw → NCCL).
-- **Bandwidth baseline** — TCP ~2.28 GB/s and NVLink ~781 GB/s are the reference numbers for capacity planning (how large a model gradient can you sync per second?).
-- **Incident evidence** — if a production AllReduce job hangs or shows errors, the diagnostic sequence here (TCP first, then RoCE, then check fabric) is the right triage path.
+- **Pre-flight validation** before handing a multi-node cluster to users: catches cabling, NVLink, and switch issues before the first training job.
+- **RoCE v2 commissioning**: the diagnostic sequence here is the standard workflow for enabling RDMA on new Ethernet-fabric GPU clusters (PFC → ECN → DCQCN → ib_write_bw → NCCL).
+- **Bandwidth baseline**: TCP ~2.28 GB/s and NVLink ~781 GB/s are the reference numbers for capacity planning (how large a model gradient can you sync per second?).
+- **Incident evidence**: if a production AllReduce job hangs or shows errors, the diagnostic sequence here (TCP first, then RoCE, then check fabric) is the right triage path.
 
 ---
 

@@ -1,6 +1,6 @@
-# RCCL on AMD Instinct — companion note
+# RCCL on AMD Instinct: companion note
 
-**Scope:** Single AMD Instinct MI300X VF — no multi-GPU numbers in this document.
+**Scope:** Single AMD Instinct MI300X VF. No multi-GPU numbers in this document.
 **Purpose:** Systems-level analysis of RCCL vs NCCL, what limits collective performance
 on Instinct hardware, and what would be measured with two or more GPUs.
 **Related:** The main repo covers NCCL P2P on NVIDIA H200 with a real 2-node cluster.
@@ -8,10 +8,10 @@ This note is the AMD counterpart: same questions, different hardware path.
 
 ---
 
-## 1. RCCL vs NCCL — API parity and key differences
+## 1. RCCL vs NCCL: API parity and key differences
 
 RCCL (ROCm Communication Collectives Library) is AMD's equivalent to NVIDIA's NCCL.
-The public API surface is intentionally compatible — most PyTorch distributed code that
+The public API surface is intentionally compatible. Most PyTorch distributed code that
 works with NCCL switches to RCCL by setting the backend to `"nccl"` (PyTorch maps this
 to RCCL on ROCm builds).
 
@@ -42,7 +42,7 @@ On a bare-metal MI300X node (8 GPUs), inter-GPU communication uses **XGMI** (the
 equivalent of NVLink). The `mi300x-amd-rocm-validation` repo documents measured RCCL
 all-reduce bandwidth on an 8-GPU node.
 
-On a **single VF** (this VM), there is no second GPU to form a peer pair — XGMI is not
+On a **single VF** (this VM), there is no second GPU to form a peer pair, so XGMI is not
 applicable. This note focuses on the inter-node path and what single-GPU RCCL init
 verifies.
 
@@ -67,13 +67,13 @@ sometimes outperforms `RING` on non-uniform topologies.
 
 ### 3b. VF / virtualisation boundary
 
-On a VF, the guest sees a single GPU. The XGMI fabric is not exposed cross-VF —
-collective operations between two VFs on the same physical host would travel **PCIe →
-host → PCIe** rather than XGMI. This is a significant bandwidth reduction (from
-~300+ GB/s to ~32 GB/s). Bare-metal deployment is required to exploit XGMI for
+On a VF, the guest sees a single GPU. The XGMI fabric is not exposed cross-VF.
+Collective operations between two VFs on the same physical host would travel **PCIe →
+host → PCIe** rather than XGMI, dropping bandwidth from
+~300+ GB/s to ~32 GB/s. Bare-metal deployment is required to exploit XGMI for
 multi-GPU collectives.
 
-### 3c. RoCE v2 — same failure modes as NCCL
+### 3c. RoCE v2: same failure modes as NCCL
 
 The RoCE v2 failure documented in this repo's main investigation
 ([`docs/roce-v2-investigation.md`](roce-v2-investigation.md)) applies identically to
@@ -105,7 +105,7 @@ export RCCL_DEBUG=INFO             # RCCL-specific messages
 
 ---
 
-## 4. Single-GPU RCCL init — what you can verify on 1 VF
+## 4. Single-GPU RCCL init: what you can verify on 1 VF
 
 Even without a second GPU, you can verify RCCL is installed and initialises correctly:
 
@@ -149,7 +149,7 @@ If a second VF or bare-metal node were available, the priority measurements woul
 | XGMI peer bandwidth (intra-node) | `rccl-tests/all_reduce_perf -b 1G -e 4G -f 2 -g 2` | Raw XGMI bandwidth vs PCIe fallback |
 | VF-to-VF vs bare-metal | Same test, VF pair vs bare-metal pair | Quantify virtualisation overhead on collectives |
 | AllReduce algorithm sweep | `NCCL_ALGO=RING`, `TREE`, `COLLNET_DIRECT` | Optimal algorithm for MI300X XGMI topology |
-| Inter-node TCP baseline | 2 nodes, `NCCL_P2P_DISABLE=1` | Same test as H200 TCP in main repo — establishes AMD TCP baseline |
+| Inter-node TCP baseline | 2 nodes, `NCCL_P2P_DISABLE=1` | Same test as H200 TCP in main repo; establishes AMD TCP baseline |
 | Inter-node RoCE v2 | 2 nodes with RoCE NIC | Confirm or reproduce `IBV_WC_RETRY_EXC_ERR` pattern; root-cause on AMD fabric |
 | Bus bandwidth vs message size | Sweep 1 KB → 4 GB | Find inflection where RCCL switches from latency-optimised to bandwidth-optimised path |
 
@@ -167,7 +167,7 @@ If a second VF or bare-metal node were available, the priority measurements woul
 
 ## References
 
-- [RCCL GitHub](https://github.com/ROCmSoftwarePlatform/rccl) — source, issue tracker
-- [rccl-tests](https://github.com/ROCmSoftwarePlatform/rccl-tests) — benchmark suite (hipcc build)
-- [ROCm docs: collective communications](https://rocm.docs.amd.com) — RCCL env vars, topology guide
-- [MI300X XGMI topology](https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html) — hardware specs
+- [RCCL GitHub](https://github.com/ROCmSoftwarePlatform/rccl): source, issue tracker
+- [rccl-tests](https://github.com/ROCmSoftwarePlatform/rccl-tests): benchmark suite (hipcc build)
+- [ROCm docs: collective communications](https://rocm.docs.amd.com): RCCL env vars, topology guide
+- [MI300X XGMI topology](https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html): hardware specs

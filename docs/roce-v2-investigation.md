@@ -8,12 +8,12 @@
 
 ## Summary
 
-RoCE v2 hardware and host configuration were correct on both nodes. RDMA failed at the **network/fabric layer** — the Ethernet switch between the nodes was not configured for RoCE v2 traffic (missing PFC/ECN/DCQCN). TCP remained the production path.
+RoCE v2 hardware and host configuration were correct on both nodes. RDMA failed at the **network/fabric layer**: the Ethernet switch between the nodes was not configured for RoCE v2 traffic (missing PFC/ECN/DCQCN). TCP remained the production path.
 
 | Transport | Result | Used for production? |
 |-----------|--------|---------------------|
-| TCP over bond0 | ✅ PASS — all collectives, 0 wrong | **Yes** |
-| RoCE v2 (RDMA) | ❌ FAIL — fabric layer | No — pending fabric fix |
+| TCP over bond0 | ✅ PASS, all collectives, 0 wrong | **Yes** |
+| RoCE v2 (RDMA) | ❌ FAIL, fabric layer | No, pending fabric fix |
 
 ---
 
@@ -22,7 +22,7 @@ RoCE v2 hardware and host configuration were correct on both nodes. RDMA failed 
 ```bash
 # Check RoCE-capable NICs
 ibstat | grep -E "Link layer|Port state"
-# Output: Link layer: Ethernet, Port state: Active — RoCE v2 capable
+# Output: Link layer: Ethernet, Port state: Active, RoCE v2 capable
 
 # List RoCE v2 GIDs
 show_gids | grep -E "mlx5_2|mlx5_7"
@@ -38,7 +38,7 @@ ping -c 3 10.0.0.2  # 0% packet loss
 
 ---
 
-## NCCL over RoCE v2 — error sequence
+## NCCL over RoCE v2: error sequence
 
 ```bash
 export NCCL_NET=IB
@@ -86,7 +86,7 @@ Couldn't connect to 10.0.0.1, retry 1 of 5 ...
 Failed to connect to remote server: status 12, syndrom 0x81
 ```
 
-**`status 12` = `IBV_WC_RETRY_EXC_ERR`.** The RDMA connection attempt failed after exhausting retries. The local NIC sent the request; the remote side never responded at the RDMA layer — consistent with a network device dropping or not forwarding RoCE packets.
+**`status 12` = `IBV_WC_RETRY_EXC_ERR`.** The RDMA connection attempt failed after exhausting retries. The local NIC sent the request; the remote side never responded at the RDMA layer, consistent with a network device dropping or not forwarding RoCE packets.
 
 ---
 
@@ -96,25 +96,25 @@ Failed to connect to remote server: status 12, syndrom 0x81
 
 | Code | Meaning |
 |------|---------|
-| `IBV_WC_RETRY_EXC_ERR (12)` | RDMA send/recv retries exhausted — remote side unreachable at RDMA layer |
+| `IBV_WC_RETRY_EXC_ERR (12)` | RDMA send/recv retries exhausted; remote side unreachable at RDMA layer |
 | `vendor_err=129` | Mellanox/NVIDIA-specific: often indicates PFC/ECN flow control mismatch |
 | `syndrom 0x81` | Mellanox: local protection error or fabric dropped packet |
 
 ### Why TCP worked but RoCE didn't
 
 TCP operates at L4; bond0 carries it fine. RoCE v2 operates at L3 but requires specific L2 handling:
-- **Priority Flow Control (PFC)** — switch must pause frames on RoCE priority queues to prevent head-of-line blocking and packet drops under congestion.
-- **ECN (Explicit Congestion Notification)** — endpoints need ECN marks from the switch to throttle before dropping.
-- **DCQCN** — the congestion control protocol running on Mellanox NICs requires switch-side ECN marking to function.
+- **Priority Flow Control (PFC)**: switch must pause frames on RoCE priority queues to prevent head-of-line blocking and packet drops under congestion.
+- **ECN (Explicit Congestion Notification)**: endpoints need ECN marks from the switch to throttle before dropping.
+- **DCQCN**: the congestion control protocol running on Mellanox NICs requires switch-side ECN marking to function.
 
-Without these, RoCE v2 packets are dropped under any congestion — and `IBV_WC_RETRY_EXC_ERR` is the result.
+Without these, RoCE v2 packets are dropped under any congestion, and `IBV_WC_RETRY_EXC_ERR` is the result.
 
 ### Fabric fix required
 
 1. **Switch:** Enable PFC on RoCE priority class (typically priority 3 or 4) on all ports carrying GPU traffic.
 2. **Switch:** Enable ECN marking on those queues.
 3. **NIC:** Verify DCQCN is enabled (`mlnx_qos` or `tc qdisc`).
-4. **Verify with:** `ib_write_bw` between nodes — should reach line rate before re-testing NCCL.
+4. **Verify with:** `ib_write_bw` between nodes; it should reach line rate before re-testing NCCL.
 
 ---
 
@@ -127,7 +127,7 @@ NCCL WARN Bootstrap : Connection to peer 10.0.0.3 timed out
 Segmentation fault (core dumped)
 ```
 
-Different symptoms, same root cause: the RDMA connection never completes, and the NCCL bootstrap timeout causes an unhandled NULL dereference in the communicator teardown path. TCP tests on this pair also showed lower bandwidth (~1.67 GB/s vs ~2.28 GB/s on the first pair) — likely a different network path or additional hop.
+Different symptoms, same root cause: the RDMA connection never completes, and the NCCL bootstrap timeout causes an unhandled NULL dereference in the communicator teardown path. TCP tests on this pair also showed lower bandwidth (~1.67 GB/s vs ~2.28 GB/s on the first pair), likely a different network path or additional hop.
 
 ---
 
@@ -146,4 +146,4 @@ TCP at ~2.28 GB/s is sufficient for medium-scale training (8–16 GPUs). For lar
 
 - [NVIDIA NCCL: Net/IB Errors](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/troubleshooting.html)
 - [Mellanox RoCE Configuration Guide](https://enterprise-support.nvidia.com/s/article/roce-configuration-for-connectx-4-and-above)
-- `IBV_WC_RETRY_EXC_ERR`: RDMA CM spec §11 — retry count exceeded
+- `IBV_WC_RETRY_EXC_ERR`: RDMA CM spec §11, retry count exceeded
